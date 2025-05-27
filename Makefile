@@ -13,6 +13,9 @@ $(BINDIR)/$(TARGET): $(SRC) | $(BINDIR)
 $(BINDIR):
 	mkdir -p $(BINDIR)
 
+run: $(OUTBIN)
+	./$(OUTBIN)
+
 clean:
 	rm -rf $(BINDIR)
 
