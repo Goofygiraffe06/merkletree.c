@@ -4,10 +4,11 @@ LDFLAGS = -lcrypto
 TARGET = merkletree
 SRC = merkletree.c
 BINDIR = bin
+OUTBIN = $(BINDIR)/$(TARGET)
 
-all: $(BINDIR)/$(TARGET)
+all: $(OUTBIN)
 
-$(BINDIR)/$(TARGET): $(SRC) | $(BINDIR)
+$(OUTBIN): $(SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 $(BINDIR):
@@ -19,5 +20,5 @@ run: $(OUTBIN)
 clean:
 	rm -rf $(BINDIR)
 
-.PHONY: all clean
+.PHONY: all clean run
 
