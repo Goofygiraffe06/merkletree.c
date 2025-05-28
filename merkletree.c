@@ -1,6 +1,6 @@
 /*
  * merkletree.c
- * A simple implementation of Merkle Trees in C
+ * A simple implementation of Merkle Trees in C with dynamic memory allocation
  */
 
 #include <stdio.h>
@@ -14,7 +14,6 @@
 #define HASH_SIZE 32                      /* SHA3-256 produces 32-byte hashes */
 #define BLOCK_SIZE (16 * 1024)            /* 16 KB for each node, 16KB hits the sweet spot between
                                              I/O troughtput and number of reads/writes  */
-#define MAX_BLOCKS 8192                   /* 128 MB / 16 KB */
 
 struct arguments {
   char *filename; /* --file FILE */
@@ -99,12 +98,12 @@ void keccak_256(const unsigned char *data, size_t len, unsigned char *out) {
  * Parameters:
  *    buffer     - pointer to the input data
  *    total_size - size of the input data in bytes
- *    out_hashes - preallocated 2D array to store output hashes
+ *    out_hashes - dynamically allocated array to store output hashes
  *
  * Returns:
  *    The number of chunks (leaf nodes) hashed.
  */
-size_t chunk_and_hash(const unsigned char *buffer, size_t total_size, unsigned char out_hashes[][HASH_SIZE]) {
+size_t chunk_and_hash(const unsigned char *buffer, size_t total_size, unsigned char **out_hashes) {
   size_t num_chunks = (total_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
   for (size_t i = 0; i < num_chunks; i++) {
@@ -142,13 +141,13 @@ void hash_pair(const unsigned char *left, const unsigned char *right, unsigned c
  * the root remains. The root hash is stored in
  * hashes[0]
  *
- * Paramters:
- *    hashes - 2D array of hashes, stores the intermediate
+ * Parameters:
+ *    hashes - dynamically allocated array of hashes, stores the intermediate
  *             and final Merkle Root
  *    count  - Initial number of leaf hashes 
  *             (returned by chunk_and_hash)
  */
-void build_merkle_tree(unsigned char hashes[][HASH_SIZE], size_t count) {
+void build_merkle_tree(unsigned char **hashes, size_t count) {
   while (count > 1) {
     size_t i, j = 0;
     for (i = 0; i < count; i += 2) {
@@ -162,6 +161,58 @@ void build_merkle_tree(unsigned char hashes[][HASH_SIZE], size_t count) {
       j++;
     }
     count = j;
+  }
+}
+
+/*
+ * Allocate memory for hash storage based on input size
+ *
+ * Parameters:
+ *    input_size - size of input data in bytes
+ *
+ * Returns:
+ *    Pointer to allocated hash array, or NULL on failure
+ */
+unsigned char** allocate_hash_storage(size_t input_size) {
+  size_t num_blocks = (input_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  
+  if (num_blocks == 0) {
+    num_blocks = 1; // Handle empty input case
+  }
+  
+  /* Allocate array of pointers */
+  unsigned char **hashes = malloc(num_blocks * sizeof(unsigned char*));
+  if (!hashes) {
+    return NULL;
+  }
+  
+  /* Allocate memory for all hashes in one contiguous block */
+  unsigned char *hash_data = malloc(num_blocks * HASH_SIZE);
+  if (!hash_data) {
+    free(hashes);
+    return NULL;
+  }
+  
+  /* Set up pointers to point into the contiguous block */
+  for (size_t i = 0; i < num_blocks; i++) {
+    hashes[i] = hash_data + (i * HASH_SIZE);
+  }
+  
+  return hashes;
+}
+
+/*
+ * Free dynamically allocated hash storage
+ *
+ * Parameters:
+ *    hashes - pointer to hash array returned by allocate_hash_storage
+ */
+void free_hash_storage(unsigned char **hashes) {
+  if (hashes) {
+    /* Free the contiguous hash data block */
+    free(hashes[0]);
+    /* Free the array of pointers */
+    free(hashes);
   }
 }
 
@@ -239,19 +290,26 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  unsigned char hashes[MAX_BLOCKS][HASH_SIZE];
+  /* Allocate hash storage dynamically based on input size */
+  unsigned char **hashes = allocate_hash_storage(input_len);
+  if (!hashes) {
+    fprintf(stderr, "Failed to allocate hash storage\n");
+    free(input_data);
+    return 1;
+  }
+
   size_t leaf_count = chunk_and_hash(input_data, input_len, hashes);
   build_merkle_tree(hashes, leaf_count);
 
   printf("Merkle Root Hash: ");
 
   /* Print the resulting hash as a hex string */
-  for (int i = 0; i < HASH_SIZE; i++) {
+  for (size_t i = 0; i < HASH_SIZE; i++) {
     printf("%02x", hashes[0][i]);
   }
   printf("\n");
   
+  free_hash_storage(hashes);
   free(input_data);
   return 0;
 }
-
