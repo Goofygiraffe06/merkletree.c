@@ -12,10 +12,13 @@
 
 #define DEFAULT_BUFFER_SIZE (1024 * 1024) /* 1 MB */
 #define HASH_SIZE 32                      /* SHA3-256 produces 32-byte hashes */
+#define BLOCK_SIZE (16 * 1024)            /* 16 KB for each node, 16KB hits the sweet spot between
+                                             I/O troughtput and number of reads/writes  */
+#define MAX_BLOCKS 8192                   /* 128 MB / 16 KB */
 
 struct arguments {
   char *filename; /* --file FILE */
-  char *data;     /*positional argument (string) */
+  char *data;     /* positional argument (string) */
 };
 
 /* argp parser options */
@@ -88,9 +91,83 @@ void keccak_256(const unsigned char *data, size_t len, unsigned char *out) {
   EVP_MD_CTX_free(mdctx);
 }
 
-/* Read all input from a FILE* into a dynamically allocated buffer.
+/*
+ * Splits the input buffer into fixed-size BLOCK_SIZE chunks 
+ * and computes sha3-256 hash for each chunk. 
+ * The resulting hashes are written to out_hashes array.
  *
  * Parameters:
+ *    buffer     - pointer to the input data
+ *    total_size - size of the input data in bytes
+ *    out_hashes - preallocated 2D array to store output hashes
+ *
+ * Returns:
+ *    The number of chunks (leaf nodes) hashed.
+ */
+size_t chunk_and_hash(const unsigned char *buffer, size_t total_size, unsigned char out_hashes[][HASH_SIZE]) {
+  size_t num_chunks = (total_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+  for (size_t i = 0; i < num_chunks; i++) {
+    size_t offset = i * BLOCK_SIZE;
+    size_t chunk_len = (offset + BLOCK_SIZE <= total_size) ? BLOCK_SIZE : (total_size - offset);
+    keccak_256(buffer + offset, chunk_len, out_hashes[i]);
+  }
+
+  return num_chunks;
+}
+
+/*
+ * Computes the SHA3-256 hash of the concatenation of
+ * two child hashes (left and right). 
+ * Used to create the parent node.
+ * 
+ * Parameters:
+ *    left  - pointer to the left hash
+ *    right - pointer to the right hash
+ *    out   - pointer to store the resulting parent hash
+ *
+ * Note - If the number of nodes are odd, duplicate it.
+ */
+void hash_pair(const unsigned char *left, const unsigned char *right, unsigned char *out) {
+  unsigned char concat[HASH_SIZE * 2];
+  memcpy(concat, left, HASH_SIZE);
+  memcpy(concat + HASH_SIZE, right, HASH_SIZE);
+  keccak_256(concat, HASH_SIZE * 2, out);
+}
+
+/*
+ * Builds the Merkle Tree from the bottom up
+ * using the array of leaf hashes. This function
+ * repeatedly hashes pairs of nodes until only 
+ * the root remains. The root hash is stored in
+ * hashes[0]
+ *
+ * Paramters:
+ *    hashes - 2D array of hashes, stores the intermediate
+ *             and final Merkle Root
+ *    count  - Initial number of leaf hashes 
+ *             (returned by chunk_and_hash)
+ */
+void build_merkle_tree(unsigned char hashes[][HASH_SIZE], size_t count) {
+  while (count > 1) {
+    size_t i, j = 0;
+    for (i = 0; i < count; i += 2) {
+      if (i + 1 < count) {
+        hash_pair(hashes[i], hashes[i + 1], hashes[j]);
+      } else {
+        /* Duplicating the last node if the 
+         * number of nodes are odd */
+        hash_pair(hashes[i], hashes[i], hashes[j]);
+      }
+      j++;
+    }
+    count = j;
+  }
+}
+
+/* Read all input from a FILE* into a dynamically allocated buffer.
+ *
+  * Parameters:
  *    fp      - input stream (stdin or file)
  *    buf     - pointer to store allocated buffer
  *    buf_len - pointer to store the number of bytes read
@@ -162,13 +239,15 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  unsigned char hash[HASH_SIZE];
-  /* Compute the SHA3-256 hash of the input string */
-  keccak_256(input_data, input_len, hash);
+  unsigned char hashes[MAX_BLOCKS][HASH_SIZE];
+  size_t leaf_count = chunk_and_hash(input_data, input_len, hashes);
+  build_merkle_tree(hashes, leaf_count);
+
+  printf("Merkle Root Hash: ");
 
   /* Print the resulting hash as a hex string */
-  for (int i = 0; i < 32; i++) {
-    printf("%02x", hash[i]);
+  for (int i = 0; i < HASH_SIZE; i++) {
+    printf("%02x", hashes[0][i]);
   }
   printf("\n");
   
