@@ -1,0 +1,244 @@
+MERKLE TREE IMPLEMENTATION IN C
+================================
+
+A simple, educational implementation of Merkle Trees in C for understanding
+cryptographic data structures and integrity verification.
+
+OVERVIEW
+--------
+
+This project implements a complete Merkle Tree system that can:
+- Compute SHA3-256 based Merkle trees for any input data
+- Generate cryptographic proofs for data integrity
+- Verify data against previously generated proofs
+- Handle files, strings, or stdin input
+- Provide detailed debugging information
+
+Merkle Trees are binary trees where each leaf node represents a hash of a data
+block, and each internal node represents the hash of its children. The root
+hash provides a single fingerprint that can detect any change in the original
+data.
+
+FEATURES
+--------
+
+- SHA3-256 (Keccak-256) hashing algorithm
+- Configurable block size (default 16KB)
+- Memory-efficient dynamic allocation
+- JSON-based proof file format
+- Block-level change detection during verification
+- Performance timing and throughput reporting
+- Comprehensive debug output
+- Support for large files through buffered I/O
+
+BUILDING
+--------
+
+Requirements:
+- GCC compiler
+- OpenSSL development libraries (libssl-dev)
+- GNU Make (optional)
+
+Compile:
+gcc -o merkletree merkletree.c -lssl -lcrypto
+
+Or with additional flags:
+gcc -Wall -O2 -o merkletree merkletree.c -lssl -lcrypto
+
+USAGE
+-----
+
+Basic Usage:
+merkletree "hello world"                     # Hash a string
+merkletree -f myfile.txt                     # Hash a file
+cat data.bin | merkletree                    # Hash from stdin
+
+Advanced Options:
+merkletree -d "test"                         # Enable debug output
+merkletree -p -f myfile.txt                  # Generate proof file
+merkletree -v proof_abc123.json -f file.txt  # Verify against proof
+
+Command Line Options:
+-f, --file FILE        Read input from specified file
+-d, --debug           Enable detailed debug output with timing
+-p, --proof           Generate JSON proof file for verification
+-v, --verify FILE     Verify current data against existing proof
+
+INPUT METHODS
+-------------
+
+1. String Argument: merkletree "your data here"
+2. File Input: merkletree -f /path/to/file
+3. Standard Input: echo "data" | merkletree
+
+The program automatically detects if stdin is a pipe or terminal and prompts
+accordingly.
+
+PROOF SYSTEM
+------------
+
+Generate Proof:
+merkletree -p -f important_file.txt
+
+This creates a proof file named "proof_XXXXXX.json" where XXXXXX is derived
+from the root hash. The proof contains:
+- Original file size
+- Number of leaf nodes
+- Root hash
+- All leaf hashes
+- Metadata (block size, algorithm)
+
+Verify Data:
+merkletree -v proof_abc123.json -f current_file.txt
+
+Verification output:
+- VERIFICATION PASSED: Data is identical
+- VERIFICATION FAILED: Shows specific modified blocks
+
+TECHNICAL DETAILS
+-----------------
+
+Hash Algorithm: SHA3-256 (Keccak-256)
+Block Size: 16KB per leaf node
+Memory Usage: Approximately input_size / block_size * 32 bytes
+Tree Construction: Bottom-up approach with pair-wise hashing
+
+For odd numbers of nodes at any level, the last node is duplicated before
+hashing (standard Merkle tree construction).
+
+DEBUG MODE
+----------
+
+Enable with -d flag to see:
+- Input reading performance
+- Memory allocation details
+- Chunking and hashing progress
+- Tree construction steps
+- Overall throughput statistics
+- Detailed hash values
+
+Example debug output:
+[DEBUG] Input size: 1048576 bytes
+[DEBUG] Block size: 16384 bytes
+[DEBUG] Number of chunks: 64
+[DEBUG] Hashing rate: 245.67 MB/s
+[DEBUG] Tree depth: 6 levels
+
+PERFORMANCE
+-----------
+
+Typical performance on modern hardware:
+- Hashing: 200-400 MB/s
+- Tree construction: Very fast (limited by hash computation)
+- Memory usage: Minimal (only stores hashes, not original data)
+
+The implementation is optimized for:
+- Large file processing
+- Memory efficiency
+- I/O throughput
+- Minimal memory reallocations
+
+PROOF FILE FORMAT
+-----------------
+
+Proof files are JSON formatted for human readability and cross-platform
+compatibility:
+
+{
+  "version": "1.0",
+  "block_size": 16384,
+  "hash_algorithm": "SHA3-256",
+  "original_size": 1048576,
+  "leaf_count": 64,
+  "root_hash": "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8",
+  "leaf_hashes": [
+    "a04c7c2bb89db2e2e7c9b1b25894c36b17e20063...",
+    ...
+  ]
+}
+
+USE CASES
+---------
+
+- File integrity verification
+- Data corruption detection
+- Educational exploration of cryptographic trees
+- Blockchain and cryptocurrency understanding
+- Distributed system data verification
+- Backup integrity checking
+- Software distribution verification
+
+LIMITATIONS
+-----------
+
+- Proof files can be large for very large inputs (32 bytes per 16KB block)
+- No compression of proof data
+- Single-threaded implementation
+- Requires entire input to be read into memory
+- No incremental/streaming tree construction
+
+EDUCATIONAL VALUE
+-----------------
+
+This implementation demonstrates:
+- Cryptographic hash function usage
+- Binary tree construction algorithms
+- Memory management in C
+- File I/O and buffering strategies
+- Command-line argument parsing
+- JSON file format handling
+- Performance measurement techniques
+
+ERROR HANDLING
+--------------
+
+The program handles:
+- Memory allocation failures
+- File I/O errors
+- Invalid command line arguments
+- Corrupted proof files
+- Hash computation errors
+- Missing input data
+
+All errors are reported to stderr with descriptive messages.
+
+LICENSE
+-------
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+
+CONTRIBUTING
+------------
+
+This is an educational project for understanding Merkle Trees. Contributions
+that improve clarity, add educational value, or fix bugs are welcome.
+
+Areas for potential improvement:
+- Multi-threading support
+- Streaming/incremental processing
+- Additional hash algorithms
+- Proof compression
+- Performance optimizations
+- Additional verification modes
+
+AUTHOR
+------
+
+Rahul Narsingipyta (Goofygiraffe06)
+
+Created as an educational project to understand Merkle Trees and their
+practical implementation in C.
+
+For questions, improvements, or educational discussions about Merkle Trees,
+cryptographic data structures, or C programming techniques, contributions
+are welcome.
