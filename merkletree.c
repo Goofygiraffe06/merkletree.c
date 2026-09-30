@@ -537,7 +537,7 @@ struct merkle_proof* load_proof(const char *filename, int debug) {
     printf("[DEBUG] Loading proof from file: %s\n", filename);
   }
   
-  struct merkle_proof *proof = malloc(sizeof(struct merkle_proof));
+  struct merkle_proof *proof = calloc(1, sizeof(struct merkle_proof));
   if (!proof) {
     fclose(fp);
     return NULL;
@@ -547,6 +547,7 @@ struct merkle_proof* load_proof(const char *filename, int debug) {
   char hex_str[HASH_SIZE * 2 + 1];
   int parsing_hashes = 0;
   size_t hash_index = 0;
+  int have_original_size = 0;
   
   proof->leaf_hashes = NULL;
   proof->leaf_count = 0;
@@ -554,8 +555,17 @@ struct merkle_proof* load_proof(const char *filename, int debug) {
   while (fgets(line, sizeof(line), fp)) {
     if (strstr(line, "\"original_size\"")) {
       sscanf(line, "  \"original_size\": %zu,", &proof->original_size);
+      have_original_size = 1;
     } else if (strstr(line, "\"leaf_count\"")) {
       sscanf(line, "  \"leaf_count\": %zu,", &proof->leaf_count);
+      /* original_size must be parsed first and match the leaf count */
+      if (!have_original_size ||
+          proof->leaf_count != (proof->original_size + BLOCK_SIZE - 1) / BLOCK_SIZE) {
+        fprintf(stderr, "Invalid proof file: leaf_count does not match original_size\n");
+        free(proof);
+        fclose(fp);
+        return NULL;
+      }
       /* Allocate memory for leaf hashes */
       proof->leaf_hashes = allocate_hash_storage(proof->original_size, debug);
       if (!proof->leaf_hashes) {
@@ -586,7 +596,22 @@ struct merkle_proof* load_proof(const char *filename, int debug) {
       if (end) {
         *end = '\0';
         if (strlen(start) == HASH_SIZE * 2) {
-          hex_to_hash(start, proof->leaf_hashes[hash_index]);
+          if (hash_index >= proof->leaf_count) {
+            fprintf(stderr, "Invalid proof file: more leaf hashes than leaf_count\n");
+            if (proof->leaf_hashes) {
+              free_hash_storage(proof->leaf_hashes);
+            }
+            free(proof);
+            fclose(fp);
+            return NULL;
+          }
+          if (hex_to_hash(start, proof->leaf_hashes[hash_index]) != 0) {
+            fprintf(stderr, "Failed to parse leaf hash\n");
+            free_hash_storage(proof->leaf_hashes);
+            free(proof);
+            fclose(fp);
+            return NULL;
+          }
           hash_index++;
         }
       }
